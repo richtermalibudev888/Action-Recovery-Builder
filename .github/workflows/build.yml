@@ -6,10 +6,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
-    environment:
-      name: /dev/null
-      url: /dev/null
     
     permissions:
       contents: write
@@ -21,8 +17,7 @@ jobs:
       matrix:
         target: [dm1q, dm2q, dm3q, q5q, gts9, gts9p, gts9u, e1s, e2s, e3q]
 
-    steps:
-    
+    steps:  
       
     - name: Check out
       uses: actions/checkout@v6
@@ -92,6 +87,7 @@ jobs:
       id: twrp
       run: |
         cd ${GITHUB_WORKSPACE}
+        export TERM=xterm
         export BUILD_USERNAME="richter"
         export BUILD_HOSTNAME="malibu"
         ./build.sh ${{ matrix.target }} 1
