@@ -1,4 +1,4 @@
-name: build twrp
+name: build ofrp (testing)
 
 on:
   workflow_dispatch:
@@ -6,10 +6,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
-    environment:
-      name: /dev/null
-      url: /dev/null
     
     permissions:
       contents: write
@@ -19,11 +15,10 @@ jobs:
     strategy:
       fail-fast: false      
       matrix:
-        target: [dm1q, dm2q, dm3q, q5q, gts9, gts9p, gts9u, e1s, e2s, e3q]
+        target: [dm1q, dm2q, dm3q, q5q, gts9, gts9p, gts9u]
 
     steps:
     
-      
     - name: Check out
       uses: actions/checkout@v6
 
@@ -68,48 +63,53 @@ jobs:
         chmod +x *
         git config --global user.name "github-actions[bot]"
         git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-        repo init --depth=1 -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp.git -b twrp-12.1 > /dev/null 2>&1
-
-    - name: Repo sync & copy moded stuff
+        
+    - name: Repo sync
       run: |
-        cd ${GITHUB_WORKSPACE}
-        repo sync -j$(nproc --all) > /dev/null 2>&1
-        mv -f images/* bootable/recovery/gui/theme/portrait_hdpi/images/
-        mv -f DroidSansMono.ttf bootable/recovery/gui/theme/common/fonts/
-        mv -f portrait.xml bootable/recovery/gui/theme/common/
-        mv -f ui.xml bootable/recovery/gui/theme/portrait_hdpi/
+        mkdir ~/Magisk
+        curl -L https://github.com/topjohnwu/Magisk/releases/download/v30.7/Magisk-v30.7.apk -o ~/Magisk/Magisk-v30.7.zip
+        mkdir -p ~/OrangeFox_sync
+        cd ~/OrangeFox_sync
+        git clone https://github.com/richtermalibudev888/orangefox_temporary_sync_403 sync
+        cd sync
+        ./orangefox_sync.sh --branch 12.1 --path ~/fox_12.1
 
     - name: Clone device tree
       run: |
-        cd ${GITHUB_WORKSPACE}
+        cd ~/fox_12.1
         git clone -b android-12.1 https://github.com/richtermalibudev888/android_device_samsung_${{ matrix.target }}.git device/samsung/${{ matrix.target }} > /dev/null 2>&1
         
     - name: Clone common tree
       run: |
-        git clone -b android-12.1 https://github.com/richtermalibudev888/android_device_samsung_sm8550-common.git device/samsung/sm8550-common > /dev/null 2>&1
+        cd ~/fox_12.1
+        git clone -b fox_12.1 https://github.com/richtermalibudev888/android_device_samsung_sm8550-common.git device/samsung/sm8550-common > /dev/null 2>&1
     
     - name: Building recovery
       id: twrp
-      run: |
+      run: |       
         cd ${GITHUB_WORKSPACE}
+        cp build.sh ~/fox_12.1
+        cd ~/fox_12.1
+        export TERM=xterm
         export BUILD_USERNAME="richter"
         export BUILD_HOSTNAME="malibu"
         ./build.sh ${{ matrix.target }} 1
-      continue-on-error: true
 
     - name: Set variables
       run: |
         echo "date=$(TZ=Asia/Ho_Chi_Minh date +%Y-%m-%dㅤ%H:%M)" >> $GITHUB_OUTPUT
         echo "Outdir=${GITHUB_WORKSPACE}" >> $GITHUB_OUTPUT
+        export ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true
       id: var
 
-    - name: Publish to github
-      uses: softprops/action-gh-release@v1
-      with:
-        files: ${{ steps.var.outputs.Outdir }}/twrp-3.7.1_12-0-${{ matrix.target }}.img.tar
-        name: Unofficial TWRP Release
-        tag_name: ${{ github.run_id }}
-        body: |
-          - ${{ steps.var.outputs.date }}
+    - name: Upload release assets
+      uses: softprops/action-gh-release@v2
       env:
-        GITHUB_TOKEN: ${{ secrets.TEST }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        body: ${{ steps.var.outputs.date }}
+        tag_name: "${{ github.run_id }}"
+        name: "Unofficial OrangeFox Release"
+        fail_on_unmatched_files: true
+        files: |
+          /home/runner/fox_12.1/out/target/product/${{ matrix.target }}/OrangeFox-R12.0_0-Beta-${{ matrix.target }}.zip
