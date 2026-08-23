@@ -1,12 +1,15 @@
 #!/bin/bash
 
-# Scripts by: @archer0305
-
+# Scripts by: @z89-richter
 # This scripts made for samsung device only! 
-
 # Unauthorized!
 
 set -e
+
+# Clean up Zone.Identifier files (Windows specific)
+# find . -name "*:Zone.Identifier" -type f -delete 2>/dev/null || true
+
+clear
 
 # Color definitions
 RED='\033[0;31m'
@@ -20,7 +23,9 @@ warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 
 # Display script author info
-info "Scripts by @archer0305"
+# info "Scripts by @z89-richter"
+# sleep 1
+# clear
 
 usage() {
     cat <<EOF
@@ -43,6 +48,7 @@ clean_out() {
     info "Cleaning output directory..."
     rm -rf out/
     info "Done cleaning."
+    clear
 }
 
 choose_target() {
@@ -56,55 +62,17 @@ choose_target() {
 
     while true; do
         printf "Enter choice [1-%d]: " "${#options[@]}"
-        read choice
+        read -r choice
         if [[ "$choice" =~ ^[1-9][0-9]*$ ]] && (( choice >= 1 && choice <= ${#values[@]} )); then
             selected="${values[$((choice-1))]}"
             [[ "$selected" == "Cancel" ]] && echo "Cancelled." && exit 0
-            info "Selected target: $selected"
+            # info "Selected target: $selected"
             TARGET="$selected"
             break
         else
             echo "Invalid choice. Enter a number between 1 and ${#values[@]}."
         fi
     done
-}
-
-compress_image() {
-    local image_name="$1"
-    local input_path="out/target/product/${DEVICE}/${image_name}.img"
-    local output_dir="out/target/product/${DEVICE}"
-    local output_path="${output_dir}/${image_name}.img.lz4"
-
-    if [[ -f "$input_path" ]]; then
-        mkdir -p "$output_dir"
-        rm -f "$output_path"
-        lz4 -B6 --content-size "$input_path" "$output_path" > /dev/null 2>&1 || error "Compression failed for ${image_name}.img"
-    else
-        warn "Missing file: $input_path, skipping compression"
-    fi
-}
-
-pack_tar() {
-    local image_name="$1"
-    local output_dir="out/target/product/${DEVICE}"
-    local tar_name="twrp-3.7.1_12-0-${DEVICE}.img.tar"
-    local main_lz4="${output_dir}/${image_name}.img.lz4"
-    local vbmeta_lz4="patch_vb/${DEVICE}/vbmeta.img.lz4"
-
-    # Check target image
-    if [[ ! -f "$main_lz4" ]]; then
-        warn "Missing .lz4 file for ${image_name}, skipping tar creation"
-        return
-    fi
-
-    # Warn if vbmeta missing
-    [[ ! -f "$vbmeta_lz4" ]] && warn "Missing vbmeta.img.lz4, will skip adding vbmeta"
-
-    # Create tar with target image
-    tar cvf "$tar_name" -C "$output_dir" "$(basename "$main_lz4")" > /dev/null 2>&1
-
-    # Add vbmeta if exists
-    [[ -f "$vbmeta_lz4" ]] && tar rvf "$tar_name" -C "patch_vb/${DEVICE}" "$(basename "$vbmeta_lz4")" > /dev/null 2>&1
 }
 
 # --- Main Logic ---
@@ -131,19 +99,25 @@ fi
 VALID_TARGETS=("recoveryimage" "bootimage" "vendorbootimage")
 [[ ! " ${VALID_TARGETS[@]} " =~ " ${TARGET} " ]] && error "Invalid target: $TARGET"
 
-info "Setting up build environment..."
+# info "Setting up build environment..."
 [[ -f build/envsetup.sh ]] || error "Missing build/envsetup.sh"
-source build/envsetup.sh || error "Failed to source build environment."
+# clear
+# shellcheck source=/dev/null
+# source build/envsetup.sh || error "Failed to source build environment."
+source build/envsetup.sh || true
 
-info "Lunching target: twrp_${DEVICE}-eng"
+# info "Lunching target: twrp_${DEVICE}-eng"
+clear
 lunch "twrp_${DEVICE}-eng" || error "Lunch failed for device: $DEVICE"
 
-info "Building: $TARGET"
+# info "Building: $TARGET"
 make -j"$(nproc)" "$TARGET" || error "Build failed for target: $TARGET"
 
 # Compress and package
 case "$TARGET" in
-    recoveryimage) compress_image "recovery"; pack_tar "recovery" ;;
-    bootimage) compress_image "boot"; pack_tar "boot" ;;
-    vendorbootimage) compress_image "vendor_boot"; pack_tar "vendor_boot" ;;
+    recoveryimage) ;;
+    bootimage) ;;
+    vendorbootimage) ;;
 esac
+
+# info "Build process completed!"
