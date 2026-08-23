@@ -1,0 +1,115 @@
+name: build twrp
+
+on:
+  workflow_dispatch:
+  
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    environment:
+      name: /dev/null
+      url: /dev/null
+    
+    permissions:
+      contents: write
+      actions: write
+      id-token: write
+    
+    strategy:
+      fail-fast: false      
+      matrix:
+        target: [dm1q, dm2q, dm3q, q5q, gts9, gts9p, gts9u, e1s, e2s, e3q]
+
+    steps:
+    
+      
+    - name: Check out
+      uses: actions/checkout@v6
+
+    - name: Cleanup
+      uses: rokibhasansagar/slimhub_actions@main
+    
+    - name: Set TimeZones
+      run: |
+        sudo timedatectl set-timezone Asia/Ho_Chi_Minh
+        sudo dpkg-reconfigure tzdata
+        echo "date=$(TZ=Asia/Ho_Chi_Minh date +%Y-%m-%dㅤ%H:%M)"
+    
+    - name: Prepare the environment
+      run: |
+        sudo apt update
+        sudo apt -y upgrade
+        sudo apt -y install ccache gperf gcc-multilib gcc-10-multilib g++-multilib g++-10-multilib libc6-dev x11proto-core-dev libx11-dev tree lib32z-dev libgl1-mesa-dev libxml2-utils xsltproc bc ccache lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libsdl1.2-dev lz4 tar libxml2 lzop pngcrush schedtool squashfs-tools imagemagick libbz2-dev lzma ncftp qemu-user-static libstdc++-10-dev python3
+      continue-on-error: true
+        
+    - name: Set Swap Space
+      uses: pierotofy/set-swap-space@master
+      with:
+        swap-size-gb: 1
+
+    - name: Install openjdk
+      uses: actions/setup-java@v3
+      with:
+        distribution: 'zulu'
+        java-version: '11'    
+
+    - name: Install repo
+      run: |
+        mkdir ~/bin
+        curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+        chmod a+x ~/bin/repo
+        sudo ln -sf ~/bin/repo /usr/bin/repo
+
+    - name: Init repo
+      run: |
+        export HOME=${GITHUB_WORKSPACE}
+        cd ${GITHUB_WORKSPACE}
+        chmod +x *
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        repo init --depth=1 -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp.git -b twrp-12.1 > /dev/null 2>&1
+
+    - name: Repo sync & copy moded stuff
+      run: |
+        cd ${GITHUB_WORKSPACE}
+        repo sync -j$(nproc --all) > /dev/null 2>&1
+        mv -f images/* bootable/recovery/gui/theme/portrait_hdpi/images/
+        mv -f DroidSansMono.ttf bootable/recovery/gui/theme/common/fonts/
+        mv -f portrait.xml bootable/recovery/gui/theme/common/
+        mv -f ui.xml bootable/recovery/gui/theme/portrait_hdpi/
+
+    - name: Clone device tree
+      run: |
+        cd ${GITHUB_WORKSPACE}
+        git clone -b android-12.1 https://github.com/richtermalibudev888/android_device_samsung_${{ matrix.target }}.git device/samsung/${{ matrix.target }} > /dev/null 2>&1
+        
+    - name: Clone common tree
+      run: |
+        git clone -b android-12.1 https://github.com/richtermalibudev888/android_device_samsung_sm8550-common.git device/samsung/sm8550-common > /dev/null 2>&1
+    
+    - name: Building recovery
+      id: twrp
+      run: |
+        cd ${GITHUB_WORKSPACE}
+        export BUILD_USERNAME="richter"
+        export BUILD_HOSTNAME="malibu"
+        ./build.sh ${{ matrix.target }} 1
+      continue-on-error: true
+
+    - name: Set variables
+      run: |
+        echo "date=$(TZ=Asia/Ho_Chi_Minh date +%Y-%m-%dㅤ%H:%M)" >> $GITHUB_OUTPUT
+        echo "Outdir=${GITHUB_WORKSPACE}" >> $GITHUB_OUTPUT
+      id: var
+
+    - name: Publish to github
+      uses: softprops/action-gh-release@v1
+      with:
+        files: ${{ steps.var.outputs.Outdir }}/twrp-3.7.1_12-0-${{ matrix.target }}.img.tar
+        name: Unofficial TWRP Release
+        tag_name: ${{ github.run_id }}
+        body: |
+          - ${{ steps.var.outputs.date }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.TEST }}
